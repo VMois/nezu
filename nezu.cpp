@@ -6,18 +6,32 @@
 #include "llvm/IR/Function.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/LLVMContext.h"
+
+// Pass Manager for optimizations
+#include "llvm/IR/LegacyPassManager.h"
+
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Type.h"
 #include "llvm/IR/Verifier.h"
+
+// Required libraries for pass function optimization
+#include "llvm/Support/TargetSelect.h"
+#include "llvm/Target/TargetMachine.h"
+#include "llvm/Transforms/InstCombine/InstCombine.h"
+#include "llvm/Transforms/Scalar.h"
+#include "llvm/Transforms/Scalar/GVN.h"
+
 #include <algorithm>
+#include <cassert>
 #include <cctype>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <map>
 #include <memory>
 #include <string>
-#include <utility>
 #include <vector>
+
 
 using namespace llvm;
 
@@ -422,6 +436,7 @@ static std::unique_ptr<PrototypeAST> ParseExtern() {
 
 static std::unique_ptr<LLVMContext> TheContext;
 static std::unique_ptr<Module> TheModule;
+static std::unique_ptr<legacy::FunctionPassManager> TheFPM;
 static std::unique_ptr<IRBuilder<>> Builder;
 static std::map<std::string, Value *> NamedValues;
 
@@ -527,6 +542,9 @@ Function *FunctionAST::codegen() {
     // Validate the generated code, checking for consistency.
     verifyFunction(*TheFunction);
 
+    // Optimize the function.
+    TheFPM->run(*TheFunction);
+
     return TheFunction;
   }
 
@@ -543,6 +561,20 @@ static void InitializeModule() {
   // Open a new context and module.
   TheContext = std::make_unique<LLVMContext>();
   TheModule = std::make_unique<Module>("my cool jit", *TheContext);
+
+  // Create a new pass manager attached to it.
+  TheFPM = std::make_unique<legacy::FunctionPassManager>(TheModule.get());
+
+  // Do simple "peephole" optimizations and bit-twiddling optimizations.
+  TheFPM->add(createInstructionCombiningPass());
+  // Reassociate expressions.
+  TheFPM->add(createReassociatePass());
+  // Eliminate Common SubExpressions.
+  TheFPM->add(createGVNPass());
+  // Simplify the control flow graph (deleting unreachable blocks, etc).
+  TheFPM->add(createCFGSimplificationPass());
+
+  TheFPM->doInitialization();
 
   // Create a new builder for the module.
   Builder = std::make_unique<IRBuilder<>>(*TheContext);

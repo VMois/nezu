@@ -33,7 +33,7 @@ $ docker run --rm -v $PWD:/pwd --name llvm -it silkeh/clang:14 bash
 2. Compile `nezu` binary:
 
 ```bash
-clang++ -g -O3 nezu.cpp `llvm-config --cxxflags --ldflags --system-libs --libs core` -o nezu
+clang++ -g -O3 nezu.cpp `llvm-config --cxxflags --ldflags --system-libs --libs core orcjit native` -o nezu
 ```
 
 ## Resources
